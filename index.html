@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/public/icon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>chat2excel</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script>
+    window.onerror = function (message, source, lineno, colno, error) {
+      const errDiv = document.createElement('div');
+      errDiv.style.position = 'fixed';
+      errDiv.style.top = '0';
+      errDiv.style.left = '0';
+      errDiv.style.width = '100%';
+      errDiv.style.height = '100%';
+      errDiv.style.backgroundColor = 'white';
+      errDiv.style.color = 'red';
+      errDiv.style.zIndex = '9999';
+      errDiv.style.padding = '20px';
+      errDiv.style.whiteSpace = 'pre-wrap';
+      errDiv.style.fontFamily = 'monospace';
+      errDiv.innerText = `Error: ${message}\nSource: ${source}:${lineno}:${colno}\nStack: ${error?.stack || ''}`;
+      document.body.appendChild(errDiv);
+      console.error('Global Error:', message, error);
+    };
+
+    window.addEventListener('unhandledrejection', function (event) {
+      const errDiv = document.createElement('div');
+      errDiv.style.position = 'fixed';
+      errDiv.style.bottom = '0';
+      errDiv.style.left = '0';
+      errDiv.style.width = '100%';
+      errDiv.style.backgroundColor = 'rgba(255,0,0,0.1)';
+      errDiv.style.color = 'darkred';
+      errDiv.style.zIndex = '9999';
+      errDiv.style.padding = '10px';
+      errDiv.innerText = `Promise Rejection: ${event.reason}`;
+      document.body.appendChild(errDiv);
+      console.error('Unhandled Rejection:', event.reason);
+    });
+  </script>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>
