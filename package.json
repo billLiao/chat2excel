@@ -112,9 +112,7 @@
       "compression": "maximum"
     },
     "publish": {
-      "provider": "github",
-      "owner": "billLiao",
-      "repo": "chat2excel"
+      "provider": "github"
     }
   }
 }
