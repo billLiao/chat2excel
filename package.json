@@ -1,15 +1,24 @@
 {
   "name": "chat2excel",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "description": "A smart data analysis tool that allows users to interact with Excel/CSV files using natural language",
+  "author": {
+    "name": "billLiao",
+    "email": "bill@example.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/billLiao/chat2excel.git"
+  },
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/version.js patch && tsc && vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
     "pack": "npm run build && electron-builder --dir",
-    "dist": "node scripts/version.js minor && tsc && vite build && node scripts/dist.js",
+    "dist": "tsc && vite build && node scripts/dist.js",
     "publish": "electron-builder --win --mac --linux --publish always"
   },
   "devDependencies": {
@@ -68,6 +77,7 @@
     "directories": {
       "output": "release"
     },
+    "compression": "maximum",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
@@ -108,8 +118,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "differentialPackage": true,
-      "compression": "maximum"
+      "differentialPackage": true
     },
     "publish": {
       "provider": "github"
