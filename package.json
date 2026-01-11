@@ -107,6 +107,9 @@
       "icon": "public/icon.icns",
       "category": "public.app-category.productivity"
     },
+    "dmg": {
+      "writeUpdateInfo": false
+    },
     "linux": {
       "target": [
         "AppImage",
