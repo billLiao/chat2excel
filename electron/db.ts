@@ -5,23 +5,30 @@ import * as XLSX from 'xlsx';
 import { app } from 'electron';
 
 export class Database {
-    private db: duckdb.Database;
+    private db!: duckdb.Database;
     private initPromise: Promise<void> | null = null;
     private initialized = false;
 
     constructor() {
-        // Use a persistent file in the userData directory
-        // In development, this will be in AppData/Roaming/chat2excel
+        // Initialization deferred to init()
+    }
+
+    public async init(): Promise<void> {
+        if (this.initialized) return;
+
         const userDataPath = app.getPath('userData');
         const dbPath = path.join(userDataPath, 'chat2excel.duckdb');
         console.log(`[DB] Using database path: ${dbPath}`);
 
         this.db = new duckdb.Database(dbPath);
 
-        // Start initialization immediately
-        this.ensureInitialized().catch(err => {
+        // Start initialization
+        try {
+            await this.ensureInitialized();
+        } catch (err) {
             console.error('[DB] Critical initialization failure:', err);
-        });
+            throw err;
+        }
     }
 
     public async ensureInitialized(): Promise<void> {
@@ -78,7 +85,6 @@ export class Database {
             throw new Error("Invalid file path: path is undefined or empty.");
         }
 
-        const normalizedPath = path.normalize(filePath).replace(/\\/g, '/');
         const fileName = path.basename(filePath, path.extname(filePath));
 
         // Final improved table name generation:
@@ -92,11 +98,10 @@ export class Database {
         const tableName = `${baseName}_${timestamp}_${salt}`;
         const ext = path.extname(filePath).toLowerCase();
 
-        if (ext === '.csv') {
-            const query = `CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${normalizedPath}');`;
-            await this.execute(query);
-        } else if (ext === '.xlsx' || ext === '.xls') {
-            await this.importExcel(filePath, tableName);
+        if (ext === '.csv' || ext === '.xlsx' || ext === '.xls') {
+            // Use Node.js based parsing for both CSV and Excel to avoid path encoding issues
+            // with DuckDB's native read_csv_auto on Windows.
+            await this.importViaNode(filePath, tableName);
         } else {
             throw new Error(`Unsupported file format: ${ext}`);
         }
@@ -105,15 +110,16 @@ export class Database {
         return tableName;
     }
 
-    private async importExcel(filePath: string, tableName: string): Promise<void> {
+    private async importViaNode(filePath: string, tableName: string): Promise<void> {
         const fileBuffer = fs.readFileSync(filePath);
+        // XLSX.read handles CSVs automatically if format is not specified or inferred
         const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
 
         const data = XLSX.utils.sheet_to_json(worksheet);
         if (!Array.isArray(data) || data.length === 0) {
-            throw new Error("Excel sheet is empty or invalid.");
+            throw new Error("File is empty or invalid.");
         }
 
         const columns = Object.keys(data[0] as object);

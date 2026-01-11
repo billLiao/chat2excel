@@ -101,17 +101,29 @@ process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.
 let win: BrowserWindow | null
 
 // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
-const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'] || 'http://127.0.0.1:5173'
+const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
 function createWindow() {
     win = new BrowserWindow({
         icon: path.join(process.env.VITE_PUBLIC || '', 'icon.png'),
+        frame: false, // Frameless window
         webPreferences: {
             preload: path.join(__dirname, 'preload.mjs'),
             nodeIntegration: true, // Empowering for local tool - as per PRD "DuckDB Node binding"
             contextIsolation: false, // Simplifying for MVP as per PRD architecture simplicity
         },
     })
+
+    // Window controls IPC
+    ipcMain.handle('window:minimize', () => win?.minimize());
+    ipcMain.handle('window:maximize', () => {
+        if (win?.isMaximized()) {
+            win.unmaximize();
+        } else {
+            win?.maximize();
+        }
+    });
+    ipcMain.handle('window:close', () => win?.close());
 
     // Hide top menu bar
     win.setMenu(null);
@@ -161,4 +173,12 @@ app.on('activate', () => {
     }
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(async () => {
+    try {
+        await db.init();
+        createWindow();
+    } catch (error) {
+        console.error('Failed to initialize application:', error);
+        app.quit();
+    }
+})

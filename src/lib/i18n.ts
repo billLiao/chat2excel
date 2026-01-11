@@ -7,11 +7,10 @@ const resources = {
         translation: {
             "app": {
                 "title": "Chat2Excel",
-                "version": "v2.0 (MVP)"
             },
             "nav": {
-                "data": "Data Center",
-                "chat": "AI Analysis",
+                "data": "Data",
+                "chat": "Chat",
                 "settings": "Settings"
             },
             "data": {
@@ -103,12 +102,11 @@ const resources = {
         translation: {
             "app": {
                 "title": "Chat2Excel",
-                "version": "v2.0 (MVP)"
             },
             "nav": {
-                "data": "数据中心",
-                "chat": "AI 智能分析",
-                "settings": "系统设置"
+                "data": "数据",
+                "chat": "对话",
+                "settings": "设置"
             },
             "data": {
                 "assets": "数据资产",

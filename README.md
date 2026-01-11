@@ -17,6 +17,9 @@ Chat2Excel is a smart data analysis tool that allows users to interact with Exce
 - **Multi-format Support**: Import Excel (.xlsx, .xls) and CSV files easily.
 - **History Management**: Keep track of your analysis sessions.
 
+[data](./docs/images/1767806873956.png)
+[data](./docs/images/1767807177016.png)
+
 ## 🚀 Getting Started
 
 ### Prerequisites

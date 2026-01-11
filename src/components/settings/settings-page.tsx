@@ -237,6 +237,11 @@ export function SettingsPage() {
                     </CardFooter>
                 </Card>
             </div>
-        </div>
+
+
+            <div className="text-center text-xs text-muted-foreground py-4 mt-auto">
+                v{__APP_VERSION__}
+            </div>
+        </div >
     );
 }

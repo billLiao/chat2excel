@@ -27,6 +27,11 @@ declare global {
             utils: {
                 getPathForFile: (file: File) => string;
             };
+            window: {
+                minimize: () => Promise<void>;
+                maximize: () => Promise<void>;
+                close: () => Promise<void>;
+            };
         };
     }
 }

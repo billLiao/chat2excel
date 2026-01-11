@@ -113,6 +113,13 @@ export function ChatLayout() {
 
         await window.api.sessions.updateMessages(currentSessionId, newMessages);
 
+        // Auto-rename session if it's the first message
+        if (messages.length === 0) {
+            const newTitle = text.trim().slice(0, 30);
+            await window.api.sessions.rename(currentSessionId, newTitle);
+            setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, title: newTitle } : s));
+        }
+
         setIsThinking(true);
         try {
             await runAgent(newMessages, config, (updatedMessages) => {
