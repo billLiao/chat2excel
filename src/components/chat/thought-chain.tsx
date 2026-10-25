@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/collapsible';
 import { ChevronRight, Database, LineChart, Loader2, Braces } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ChatMessage } from '@/lib/agent/core';
+import type { ChatMessage } from '@/lib/agent/message';
 
 interface ThoughtChainProps {
     toolDetails: {

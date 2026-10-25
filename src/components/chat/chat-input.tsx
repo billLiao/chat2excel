@@ -1,6 +1,6 @@
 import { useState, useEffect, type KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
-import { SendHorizontal, Loader2, Database, Brain, Settings } from 'lucide-react';
+import { SendHorizontal, Loader2, Database, Brain, Settings, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import {
@@ -22,9 +22,11 @@ import {
 interface ChatInputProps {
     onSend: (message: string, contextTables: string[], modelConfig: any) => void;
     disabled?: boolean;
+    isThinking?: boolean;
+    onStop?: () => void;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, isThinking, onStop }: ChatInputProps) {
     const { t } = useTranslation();
     const [input, setInput] = useState('');
     const [tables, setTables] = useState<{ name: string, displayName: string }[]>([]);
@@ -182,15 +184,24 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
 
                     <Button
                         size="sm"
-                        onClick={handleSend}
-                        disabled={!input.trim() || disabled}
+                        onClick={isThinking ? onStop : handleSend}
+                        disabled={!isThinking && (!input.trim() || disabled)}
+                        variant={isThinking ? 'destructive' : 'default'}
                         className={cn(
                             "rounded-lg gap-2 h-8 px-4 font-semibold shadow-sm transition-all",
-                            input.trim() ? "bg-primary hover:scale-[1.02] active:scale-[0.98]" : "bg-muted-foreground/30 text-muted-foreground"
+                            isThinking
+                                ? "bg-destructive hover:bg-destructive/90"
+                                : input.trim() ? "bg-primary hover:scale-[1.02] active:scale-[0.98]" : "bg-muted-foreground/30 text-muted-foreground"
                         )}
                     >
-                        {disabled ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SendHorizontal className="h-3.5 w-3.5" />}
-                        {t('chat.send')}
+                        {isThinking ? (
+                            <Square className="h-3.5 w-3.5 fill-current" />
+                        ) : disabled ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                            <SendHorizontal className="h-3.5 w-3.5" />
+                        )}
+                        {isThinking ? t('chat.stop') : t('chat.send')}
                     </Button>
                 </div>
             </div>

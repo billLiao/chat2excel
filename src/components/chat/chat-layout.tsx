@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
-import { runAgent, type ChatMessage } from '@/lib/agent/core';
+import type { AskUserRequest, ChatMessage } from '@/lib/agent/message';
 import { Button } from '@/components/ui/button';
 import { Plus, MessageSquare, Trash2, Edit2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,16 @@ interface Session {
     id: string;
     title: string;
     messages: ChatMessage[];
+    timestamp?: number;
+    updatedAt?: number;
+}
+
+function safeParseJson(raw: string): Record<string, any> | null {
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
 }
 
 export function ChatLayout() {
@@ -22,23 +32,95 @@ export function ChatLayout() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
     const [configError, setConfigError] = useState<string | null>(null);
+    const [pendingQuestions, setPendingQuestions] = useState<Record<string, AskUserRequest>>({});
 
     const messagesRef = useRef<ChatMessage[]>([]);
+    const currentSessionIdRef = useRef<string | null>(null);
+    const activeRunsRef = useRef<Map<string, string>>(new Map());
+
+    useEffect(() => {
+        currentSessionIdRef.current = currentSessionId;
+    }, [currentSessionId]);
 
     useEffect(() => {
         loadSessions();
     }, []);
 
+    useEffect(() => {
+        const unsubscribe = window.api.agent.onEvent((event) => {
+            if (event.messages) {
+                setSessions((prev) =>
+                    prev.map((session) =>
+                        session.id === event.sessionId
+                            ? { ...session, messages: event.messages }
+                            : session
+                    )
+                );
+                if (event.sessionId === currentSessionIdRef.current) {
+                    setMessages(event.messages);
+                    messagesRef.current = event.messages;
+                }
+            }
+
+            // ask_user: the question card becomes interactive as soon as the
+            // tool starts, and freezes into a persisted record on tool_end.
+            if (event.type === 'tool_start' && event.toolName === 'ask_user') {
+                const raw =
+                    typeof event.toolArgs === 'string'
+                        ? safeParseJson(event.toolArgs)
+                        : event.toolArgs;
+                if (event.toolCallId) {
+                    setPendingQuestions((prev) => ({
+                        ...prev,
+                        [event.toolCallId!]: {
+                            question: typeof raw?.question === 'string' ? raw.question : '',
+                            options: Array.isArray(raw?.options) ? raw.options : undefined,
+                            multiple: raw?.multiple === true,
+                            allowFreeText: raw?.allowFreeText !== false,
+                        },
+                    }));
+                }
+            }
+            if (
+                (event.type === 'tool_end' && event.toolName === 'ask_user' && event.toolCallId) ||
+                event.type === 'end' ||
+                event.type === 'error'
+            ) {
+                setPendingQuestions((prev) => {
+                    if (event.type !== 'tool_end') return {};
+                    const next = { ...prev };
+                    delete next[event.toolCallId!];
+                    return next;
+                });
+            }
+
+            if (event.type === 'end' || event.type === 'error') {
+                activeRunsRef.current.delete(event.sessionId);
+                if (event.sessionId === currentSessionIdRef.current) {
+                    setIsThinking(false);
+                }
+                if (event.error) {
+                    setConfigError(event.error);
+                }
+            }
+        });
+        return unsubscribe;
+    }, []);
+
     const loadSessions = async () => {
         const list = await window.api.sessions.list();
-        // Sort by timestamp descending to ensure history shows up correctly
-        const sorted = [...list].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        // Newest first; older records only have `timestamp`.
+        const sorted = [...list].sort(
+            (a, b) =>
+                (b.updatedAt ?? b.timestamp ?? 0) - (a.updatedAt ?? a.timestamp ?? 0)
+        );
         setSessions(sorted);
         if (sorted.length > 0) {
             const current = sorted.find(s => s.id === currentSessionId) || sorted[0];
             setCurrentSessionId(current.id);
             setMessages(current.messages || []);
             messagesRef.current = current.messages || [];
+            setIsThinking(activeRunsRef.current.has(current.id));
         } else {
             handleNewChat();
         }
@@ -50,12 +132,15 @@ export function ChatLayout() {
         setCurrentSessionId(newSession.id);
         setMessages([]);
         messagesRef.current = [];
+        setIsThinking(activeRunsRef.current.has(newSession.id));
     };
 
     const handleSelectSession = (session: Session) => {
         setCurrentSessionId(session.id);
         setMessages(session.messages || []);
         messagesRef.current = session.messages || [];
+        setIsThinking(activeRunsRef.current.has(session.id));
+        setConfigError(null);
     };
 
     const handleDeleteSession = async (e: React.MouseEvent, id: string) => {
@@ -87,19 +172,9 @@ export function ChatLayout() {
 
     const handleSendMessage = async (text: string, contextTables: string[], modelConfig: any) => {
         if (!text.trim() || !currentSessionId) return;
+        if (isThinking) return;
 
-        if (!modelConfig || !modelConfig.apiKey || !modelConfig.modelId) {
-            setConfigError(t('chat.config_error'));
-            return;
-        }
         setConfigError(null);
-
-        const config = {
-            apiKey: modelConfig.apiKey,
-            baseUrl: modelConfig.baseUrl || "https://api.openai.com/v1",
-            model: modelConfig.modelId,
-            systemPrompt: await window.api.settings.get('systemPrompt')
-        };
 
         const userMsg: ChatMessage = {
             id: crypto.randomUUID(),
@@ -111,8 +186,6 @@ export function ChatLayout() {
         setMessages(newMessages);
         messagesRef.current = newMessages;
 
-        await window.api.sessions.updateMessages(currentSessionId, newMessages);
-
         // Auto-rename session if it's the first message
         if (messages.length === 0) {
             const newTitle = text.trim().slice(0, 30);
@@ -122,16 +195,31 @@ export function ChatLayout() {
 
         setIsThinking(true);
         try {
-            await runAgent(newMessages, config, (updatedMessages) => {
-                setMessages(updatedMessages);
-                messagesRef.current = updatedMessages;
-                window.api.sessions.updateMessages(currentSessionId, updatedMessages);
-            }, contextTables);
-        } catch (error) {
+            const response = await window.api.agent.run({
+                sessionId: currentSessionId,
+                input: text,
+                contextTables,
+                modelName: modelConfig?.name,
+            });
+
+            if (response?.error || !response?.runId) {
+                throw new Error(response?.error || t('chat.config_error'));
+            }
+
+            activeRunsRef.current.set(currentSessionId, response.runId);
+        } catch (error: any) {
             console.error("Agent error:", error);
-        } finally {
+            setConfigError(error?.message || String(error));
             setIsThinking(false);
+            activeRunsRef.current.delete(currentSessionId);
         }
+    };
+
+    const handleStop = async () => {
+        if (!currentSessionId) return;
+        const runId = activeRunsRef.current.get(currentSessionId);
+        if (!runId) return;
+        await window.api.agent.abort(runId);
     };
 
 
@@ -220,7 +308,11 @@ export function ChatLayout() {
 
 
                 <div className="flex-1 overflow-hidden flex flex-col">
-                    <MessageList messages={messages} isThinking={isThinking} />
+                    <MessageList
+                        messages={messages}
+                        isThinking={isThinking}
+                        pendingQuestions={pendingQuestions}
+                    />
                 </div>
 
                 <div className="p-4 max-w-4xl mx-auto w-full space-y-2">
@@ -230,7 +322,12 @@ export function ChatLayout() {
                             <span>{configError}</span>
                         </div>
                     )}
-                    <ChatInput onSend={handleSendMessage} disabled={isThinking} />
+                    <ChatInput
+                        onSend={handleSendMessage}
+                        disabled={isThinking}
+                        isThinking={isThinking}
+                        onStop={handleStop}
+                    />
                 </div>
             </main>
         </div>

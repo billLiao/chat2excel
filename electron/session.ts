@@ -1,12 +1,8 @@
 import Store from 'electron-store';
 import { randomUUID } from 'node:crypto';
+import type { ChatMessage } from '../src/lib/agent/message';
 
-export interface Message {
-    role: 'user' | 'assistant';
-    content: string;
-    thinking?: string;
-    timestamp: number;
-}
+export type Message = ChatMessage;
 
 export interface ChatSession {
     id: string;

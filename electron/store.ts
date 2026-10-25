@@ -11,6 +11,10 @@ interface UserSettings {
     }[];
     activeModelId?: string;
     systemPrompt?: string;
+    agentWorkspace?: string;
+    agentSkillState?: Record<string, boolean>;
+    agentInstructionState?: Record<string, boolean>;
+    mcpServers?: unknown[];
 }
 
 const schema = {

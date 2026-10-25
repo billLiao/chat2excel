@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, AlertCircle, Info, Database, Edit2, Check, X, Trash2 } from 'lucide-react';
+import { Loader2, AlertCircle, Info, Database, Edit2, Check, X, Trash2, Play, Code, Table2, Hash, Columns } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTranslation } from 'react-i18next';
 
@@ -29,6 +30,14 @@ export function TableView({ tableName }: TableViewProps) {
     const [tableDesc, setTableDesc] = useState("");
     const [isEditingTableDesc, setIsEditingTableDesc] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // SQL Query states
+    const [sqlQuery, setSqlQuery] = useState("");
+    const [sqlResult, setSqlResult] = useState<any[]>([]);
+    const [sqlColumns, setSqlColumns] = useState<string[]>([]);
+    const [sqlLoading, setSqlLoading] = useState(false);
+    const [sqlError, setSqlError] = useState<string | null>(null);
+    const [sqlHistory, setSqlHistory] = useState<string[]>([]);
 
     const fetchData = async () => {
         if (!tableName) return;
@@ -103,6 +112,85 @@ export function TableView({ tableName }: TableViewProps) {
             console.error("Failed to delete table", err);
         } finally {
             setIsDeleting(false);
+        }
+    };
+
+    const handleExecuteSQL = async () => {
+        if (!sqlQuery.trim()) return;
+
+        setSqlLoading(true);
+        setSqlError(null);
+
+        try {
+            const result = await window.api.db.executeSQL(sqlQuery);
+
+            if (result.success && result.data) {
+                setSqlResult(result.data);
+                // Extract column names from first row
+                if (result.data.length > 0) {
+                    setSqlColumns(Object.keys(result.data[0]));
+                } else {
+                    setSqlColumns([]);
+                }
+                // Add to history if not already present
+                if (!sqlHistory.includes(sqlQuery.trim())) {
+                    setSqlHistory(prev => [sqlQuery.trim(), ...prev].slice(0, 10));
+                }
+            } else {
+                setSqlError(result.error || t('data.query_failed'));
+                setSqlResult([]);
+                setSqlColumns([]);
+            }
+        } catch (err: any) {
+            setSqlError(err.message);
+            setSqlResult([]);
+            setSqlColumns([]);
+        } finally {
+            setSqlLoading(false);
+        }
+    };
+
+    const handleUseHistoryQuery = (query: string) => {
+        setSqlQuery(query);
+    };
+
+    const handleClearSQL = () => {
+        setSqlQuery("");
+        setSqlResult([]);
+        setSqlColumns([]);
+        setSqlError(null);
+    };
+
+    const handleInsertTableName = () => {
+        if (tableName) {
+            insertTextAtCursor(tableName);
+        }
+    };
+
+    const handleInsertTemplate = (template: string) => {
+        if (tableName) {
+            const sql = template.replace(/\{tableName\}/g, tableName);
+            insertTextAtCursor(sql);
+        }
+    };
+
+    const insertTextAtCursor = (text: string) => {
+        const textarea = document.querySelector('textarea[data-sql-editor="true"]') as HTMLTextAreaElement;
+        if (textarea) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const currentValue = sqlQuery;
+            const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
+            setSqlQuery(newValue);
+            // Focus and set cursor position after inserted text
+            setTimeout(() => {
+                textarea.focus();
+                const newCursorPos = start + text.length;
+                textarea.setSelectionRange(newCursorPos, newCursorPos);
+            }, 0);
+        } else {
+            // Fallback: append to end
+            setSqlQuery(prev => prev + text);
         }
     };
 
@@ -190,19 +278,25 @@ export function TableView({ tableName }: TableViewProps) {
             <Tabs defaultValue="preview" className="flex-1 flex flex-col overflow-hidden">
                 <div className="px-6 border-b bg-muted/30">
                     <TabsList className="h-10 bg-transparent p-0 gap-6">
-                        <TabsTrigger
-                            value="preview"
-                            className="h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1"
-                        >
-                            {t('data.preview')}
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="schema"
-                            className="h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1"
-                        >
-                            {t('data.schema')}
-                        </TabsTrigger>
-                    </TabsList>
+                    <TabsTrigger
+                        value="preview"
+                        className="h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1"
+                    >
+                        {t('data.preview')}
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="schema"
+                        className="h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1"
+                    >
+                        {t('data.schema')}
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="sql"
+                        className="h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1"
+                    >
+                        {t('data.sql_query')}
+                    </TabsTrigger>
+                </TabsList>
                 </div>
 
                 <TabsContent value="preview" className="flex-1 overflow-auto m-0 p-0 border-none outline-none">
@@ -308,6 +402,167 @@ export function TableView({ tableName }: TableViewProps) {
                                 </Table>
                             </CardContent>
                         </Card>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="sql" className="flex-1 overflow-hidden m-0 p-0 border-none outline-none">
+                    <div className="flex flex-col h-full">
+                        {/* SQL Input Area */}
+                        <div className="p-4 border-b bg-muted/10 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Code className="w-4 h-4 text-muted-foreground" />
+                                    <span className="text-sm font-medium">{t('data.sql_editor')}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {sqlHistory.length > 0 && (
+                                        <select
+                                            className="text-xs border rounded px-2 py-1 bg-background"
+                                            onChange={(e) => e.target.value && handleUseHistoryQuery(e.target.value)}
+                                            value=""
+                                        >
+                                            <option value="">{t('data.history')}</option>
+                                            {sqlHistory.map((query, idx) => (
+                                                <option key={idx} value={query}>
+                                                    {query.length > 50 ? query.substring(0, 50) + '...' : query}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleClearSQL}
+                                        disabled={!sqlQuery && sqlResult.length === 0}
+                                    >
+                                        {t('data.clear')}
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={handleExecuteSQL}
+                                        disabled={sqlLoading || !sqlQuery.trim()}
+                                        className="gap-1"
+                                    >
+                                        {sqlLoading ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                            <Play className="w-3.5 h-3.5" />
+                                        )}
+                                        {t('data.execute')}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Quick Insert Buttons */}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-muted-foreground mr-1">{t('data.quick_insert')}:</span>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="h-7 text-xs gap-1"
+                                    onClick={handleInsertTableName}
+                                    disabled={!tableName}
+                                    title={t('data.insert_table_name')}
+                                >
+                                    <Table2 className="w-3 h-3" />
+                                    {t('data.table_name')}
+                                </Button>
+                                <div className="w-px h-4 bg-border mx-1" />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs gap-1"
+                                    onClick={() => handleInsertTemplate('SELECT * FROM {tableName} LIMIT 100')}
+                                    disabled={!tableName}
+                                >
+                                    <Database className="w-3 h-3" />
+                                    SELECT *
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs gap-1"
+                                    onClick={() => handleInsertTemplate('SELECT COUNT(*) FROM {tableName}')}
+                                    disabled={!tableName}
+                                >
+                                    <Hash className="w-3 h-3" />
+                                    COUNT
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs gap-1"
+                                    onClick={() => handleInsertTemplate(`SELECT * FROM {tableName} WHERE `)}
+                                    disabled={!tableName}
+                                >
+                                    <Columns className="w-3 h-3" />
+                                    SELECT WHERE
+                                </Button>
+                            </div>
+
+                            <Textarea
+                                data-sql-editor="true"
+                                value={sqlQuery}
+                                onChange={(e) => setSqlQuery(e.target.value)}
+                                placeholder={t('data.sql_placeholder')}
+                                className="font-mono text-sm min-h-[100px] resize-none"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                        handleExecuteSQL();
+                                    }
+                                }}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                {t('data.sql_hint')}
+                            </p>
+                        </div>
+
+                        {/* SQL Result Area */}
+                        <div className="flex-1 overflow-auto">
+                            {sqlError ? (
+                                <div className="p-6 text-destructive flex items-center gap-2 text-sm">
+                                    <AlertCircle className="w-4 h-4" />
+                                    {t('data.error')}: {sqlError}
+                                </div>
+                            ) : sqlResult.length > 0 ? (
+                                <Table>
+                                    <TableHeader className="sticky top-0 bg-background/80 backdrop-blur-sm shadow-sm z-10">
+                                        <TableRow>
+                                            {sqlColumns.map((col) => (
+                                                <TableHead key={col} className="min-w-[150px] font-bold text-foreground py-3">
+                                                    {col}
+                                                </TableHead>
+                                            ))}
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {sqlResult.map((row, idx) => (
+                                            <TableRow key={idx} className="hover:bg-muted/30 transition-colors">
+                                                {sqlColumns.map((col) => (
+                                                    <TableCell key={`${idx}-${col}`} className="font-mono text-[11px] py-2">
+                                                        {row[col]?.toString() ?? <span className="text-muted-foreground/50 italic font-sans text-[10px]">null</span>}
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-4">
+                                    <div className="p-4 rounded-full bg-muted/50">
+                                        <Database className="w-12 h-12 opacity-20" />
+                                    </div>
+                                    <p className="text-sm">{t('data.sql_empty_result')}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Result Stats */}
+                        {sqlResult.length > 0 && (
+                            <div className="px-4 py-2 border-t bg-muted/10 text-xs text-muted-foreground">
+                                {t('data.rows_returned', { count: sqlResult.length })}
+                            </div>
+                        )}
                     </div>
                 </TabsContent>
             </Tabs>

@@ -15,9 +15,17 @@ export function FileImportModal({ isOpen, onClose, onImportSuccess }: FileImport
     const [isDragging, setIsDragging] = useState(false);
     const [importing, setImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [summary, setSummary] = useState<any | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     if (!isOpen) return null;
+
+    const handleClose = () => {
+        if (importing) return;
+        setSummary(null);
+        setError(null);
+        onClose();
+    };
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
@@ -52,8 +60,8 @@ export function FileImportModal({ isOpen, onClose, onImportSuccess }: FileImport
             const result = await window.api.db.importFile(filePath);
 
             if (result.success) {
+                setSummary(result.summary || null);
                 onImportSuccess();
-                onClose();
             } else {
                 setError(result.error || t('data.import_failed'));
             }
@@ -82,42 +90,101 @@ export function FileImportModal({ isOpen, onClose, onImportSuccess }: FileImport
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
             <div className="w-full max-w-md border bg-card p-6 shadow-lg sm:rounded-lg">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">{t('data.import_title')}</h3>
-                    <Button variant="ghost" size="icon" onClick={onClose} disabled={importing}>
+                    <h3 className="text-lg font-semibold">
+                        {summary ? t('data.import_success') : t('data.import_title')}
+                    </h3>
+                    <Button variant="ghost" size="icon" onClick={handleClose} disabled={importing}>
                         <X className="w-4 h-4" />
                     </Button>
                 </div>
 
-                <div
-                    className={cn(
-                        "border-2 border-dashed rounded-lg p-10 flex flex-col items-center justify-center gap-4 transition-colors cursor-pointer bg-muted/10",
-                        isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25",
-                        importing && "opacity-50 pointer-events-none"
-                    )}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                >
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="hidden"
-                        accept=".csv,.xlsx,.xls"
-                        onChange={handleFileSelect}
-                    />
-
-                    <div className="p-4 rounded-full bg-primary/10">
-                        <Upload className="w-8 h-8 text-primary" />
+                {summary ? (
+                    <div className="space-y-3">
+                        <div className="max-h-[50vh] overflow-y-auto space-y-3">
+                            {summary.sheets?.map((sheet: any) => (
+                                <div key={sheet.tableName} className="border rounded-lg p-3 space-y-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-medium truncate">
+                                                {sheet.sheetName}
+                                            </div>
+                                            <div className="text-[10px] text-muted-foreground font-mono truncate">
+                                                {sheet.tableName}
+                                            </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <div className="text-xs text-muted-foreground">
+                                                {t('data.imported_rows', { count: sheet.rowCount })}
+                                            </div>
+                                            {sheet.datasetUpdated !== undefined && (
+                                                <div
+                                                    className={
+                                                        sheet.datasetUpdated
+                                                            ? 'text-[10px] text-amber-600 dark:text-amber-400'
+                                                            : 'text-[10px] text-emerald-600 dark:text-emerald-400'
+                                                    }
+                                                >
+                                                    {sheet.datasetUpdated
+                                                        ? t('data.dataset_updated', {
+                                                              version: sheet.importVersion,
+                                                          })
+                                                        : t('data.dataset_new')}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="text-[11px] text-muted-foreground leading-relaxed">
+                                        {t('data.inferred_columns')}:{' '}
+                                        {sheet.columns
+                                            ?.map((column: any) => `${column.name} (${column.type})`)
+                                            .join(' · ')}
+                                    </div>
+                                    {sheet.warnings?.length > 0 && (
+                                        <div className="text-[11px] text-amber-600 dark:text-amber-400">
+                                            {t('data.import_warnings')}: {sheet.warnings.join(' ')}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex justify-end">
+                            <Button size="sm" onClick={handleClose}>
+                                {t('data.done')}
+                            </Button>
+                        </div>
                     </div>
+                ) : (
+                    <div
+                        className={cn(
+                            "border-2 border-dashed rounded-lg p-10 flex flex-col items-center justify-center gap-4 transition-colors cursor-pointer bg-muted/10",
+                            isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25",
+                            importing && "opacity-50 pointer-events-none"
+                        )}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            accept=".csv,.xlsx,.xls"
+                            onChange={handleFileSelect}
+                        />
 
-                    <div className="text-center">
-                        <p className="font-medium">{t('data.drag_desc')}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            {t('data.supported_formats')}
-                        </p>
+                        <div className="p-4 rounded-full bg-primary/10">
+                            <Upload className="w-8 h-8 text-primary" />
+                        </div>
+
+                        <div className="text-center">
+                            <p className="font-medium">{t('data.drag_desc')}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {t('data.supported_formats')}
+                            </p>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {error && (
                     <div className="mt-4 p-3 text-sm text-destructive bg-destructive/10 rounded-md flex items-center gap-2">

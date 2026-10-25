@@ -4,7 +4,9 @@ import { FileImportModal } from '@/components/data/file-import-modal'
 import { TableView } from '@/components/data/table-view'
 import { ChatLayout } from '@/components/chat/chat-layout'
 import { SettingsPage } from '@/components/settings/settings-page'
-import { MessageSquare, Settings as SettingsIcon, Database, Minus, Square, X } from 'lucide-react'
+import { AgentManager } from '@/components/agents/agent-manager'
+import { DashboardPage } from '@/components/dashboard/dashboard-page'
+import { MessageSquare, Settings as SettingsIcon, Database, Bot, LayoutDashboard, Minus, Square, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
 import '@/lib/i18n' // Ensure initialized
@@ -13,7 +15,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 
 function App() {
     const { t } = useTranslation();
-    const [activeTab, setActiveTab] = useState<'data' | 'chat' | 'settings'>('data')
+    const [activeTab, setActiveTab] = useState<'data' | 'chat' | 'dashboard' | 'agents' | 'settings'>('data')
     // Data Tab State
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [selectedTable, setSelectedTable] = useState<string>("");
@@ -58,6 +60,8 @@ function App() {
                         <nav className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
                             <NavButton id="data" label={t('nav.data')} icon={Database} />
                             <NavButton id="chat" label={t('nav.chat')} icon={MessageSquare} />
+                            <NavButton id="dashboard" label={t('nav.dashboard')} icon={LayoutDashboard} />
+                            <NavButton id="agents" label={t('nav.agents')} icon={Bot} />
                         </nav>
                     </div>
 
@@ -103,6 +107,16 @@ function App() {
                     {activeTab === 'chat' && (
                         <div className="h-full flex flex-col animate-in fade-in duration-300 slide-in-from-bottom-2">
                             <ChatLayout />
+                        </div>
+                    )}
+                    {activeTab === 'dashboard' && (
+                        <div className="h-full flex flex-col overflow-hidden animate-in fade-in duration-300">
+                            <DashboardPage onOpenChat={() => setActiveTab('chat')} />
+                        </div>
+                    )}
+                    {activeTab === 'agents' && (
+                        <div className="h-full overflow-hidden animate-in fade-in duration-300">
+                            <AgentManager />
                         </div>
                     )}
                     {activeTab === 'settings' && (
